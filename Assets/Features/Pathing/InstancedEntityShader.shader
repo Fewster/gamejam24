@@ -51,8 +51,10 @@ Shader "Unlit/InstancedEntityShader"
             {
                 v2f o;
 
+                float4 vertex = v.vertex;
+                v.vertex.xyz *= 0.1;
                 float4 wPos = mul(unity_ObjectToWorld, v.vertex);
-                wPos.xyz += AgentBuffer[svInstanceID].Position * 0.1;// + float3(0,svInstanceID,0);
+                wPos.xyz += AgentBuffer[svInstanceID].Position;// + float3(0,svInstanceID,0);
 
                 o.vertex = mul(UNITY_MATRIX_VP, wPos);
                 o.uv = TRANSFORM_TEX(v.uv, _MainTex);
