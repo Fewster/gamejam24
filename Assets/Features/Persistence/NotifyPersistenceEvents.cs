@@ -3,6 +3,10 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
+#if UNITY_EDITOR
+using UnityEditor;
+#endif
+
 /// <summary>
 /// Automatically discovers all <see cref="IPersistent"/> and notifies them whenever a save/load occurs.
 /// </summary>
@@ -44,3 +48,20 @@ public class NotifyPersistenceEvents : GameBehaviour
         }
     }
 }
+
+
+#if UNITY_EDITOR
+
+[CustomEditor(typeof(NotifyPersistenceEvents))]
+public class NotifyPersistenceEventsEditor : Editor
+{
+    public override void OnInspectorGUI()
+    {
+        base.OnInspectorGUI();
+
+        EditorGUILayout.Space();
+        EditorGUILayout.HelpBox("Automatically notifies Save/Load events on all components of this object.", MessageType.Info);
+    }
+}
+
+#endif

@@ -8,28 +8,33 @@ public class Bank : GameService<Bank>, IPersistent
     /// The total souls that the player has.
     /// 'Premium' currency.
     /// </summary>
-    public Stat Souls;
+    public Stat Souls = new();
 
     /// <summary>
     /// The total influence that the player has.
     /// 'Standard' currency.
     /// </summary>
-    public Stat Influence;
+    public Stat Influence = new();
 
     /// <summary>
     /// The total harvested items that the player has.
     /// This varies depending on the 'level'.
     /// This would represent things like bones, blood, etc.
     /// </summary>
-    public Stat Harvested;
+    public Stat Harvested = new();
 
     /// <summary>
     /// The total victims that the player has.
     /// </summary>
-    public Stat Victims;
+    public Stat Victims = new();
 
     private void OnValidate()
     {
+        if (!Application.isPlaying)
+        {
+            return;
+        }
+
         // Ensure editor changes 'dirty' the stats.
         Souls.Dirty();
         Influence.Dirty();
