@@ -60,7 +60,7 @@ public class Bank : GameService<Bank>, IPersistent
         persistentSouls.Value = Souls.Value;
         persistentInfluence.Value = Influence.Value;
         persistentHarvested.Value = Harvested.Value;
-        persistentVictims.Value = Harvested.Value;
+        persistentVictims.Value = Victims.Value;
     }
 }
 
