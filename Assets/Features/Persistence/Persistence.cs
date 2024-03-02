@@ -27,6 +27,8 @@ public class Persistence : GameService<Persistence>
         // Let objects append any extra save data before saving
         OnSaving?.Invoke();
 
+        Debug.Log($"Saving {Model.Count} properties");
+
         var codec = new PersistenceCodecV1();
         var data = codec.Write(Model);
 
