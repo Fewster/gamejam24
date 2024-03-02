@@ -11,10 +11,10 @@ public class Bank : GameService<Bank>, IPersistent
     public Stat Souls = new();
 
     /// <summary>
-    /// The total influence that the player has.
+    /// The total mana that the player has.
     /// 'Standard' currency.
     /// </summary>
-    public Stat Influence = new();
+    public Stat Mana = new();
 
     /// <summary>
     /// The total harvested items that the player has.
@@ -24,7 +24,7 @@ public class Bank : GameService<Bank>, IPersistent
     public Stat Harvested = new();
 
     /// <summary>
-    /// The total victims that the player has.
+    /// The total victims that the player has murdered.
     /// </summary>
     public Stat Victims = new();
 
@@ -37,7 +37,7 @@ public class Bank : GameService<Bank>, IPersistent
 
         // Ensure editor changes 'dirty' the stats.
         Souls.Dirty();
-        Influence.Dirty();
+        Mana.Dirty();
         Harvested.Dirty();
         Victims.Dirty();
     }
@@ -45,12 +45,12 @@ public class Bank : GameService<Bank>, IPersistent
     public void Load(PersistenceModel model)
     {
         var persistentSouls = model.EnsureDouble("TOTAL_SOULS");
-        var persistentInfluence = model.EnsureDouble("TOTAL_INFLUENCE");
+        var persistentInfluence = model.EnsureDouble("TOTAL_MANA");
         var persistentHarvested = model.EnsureDouble("TOTAL_HARVESTED");
         var persistentVictims = model.EnsureDouble("TOTAL_VICTIMS");
 
         Souls.Value = persistentSouls.Value;
-        Influence.Value = persistentInfluence.Value;
+        Mana.Value = persistentInfluence.Value;
         Harvested.Value = persistentHarvested.Value;
         Victims.Value = persistentVictims.Value;
     }
@@ -58,12 +58,12 @@ public class Bank : GameService<Bank>, IPersistent
     public void Save(PersistenceModel model)
     {
         var persistentSouls = model.EnsureDouble("TOTAL_SOULS");
-        var persistentInfluence = model.EnsureDouble("TOTAL_INFLUENCE");
+        var persistentInfluence = model.EnsureDouble("TOTAL_MANA");
         var persistentHarvested = model.EnsureDouble("TOTAL_HARVESTED");
         var persistentVictims = model.EnsureDouble("TOTAL_VICTIMS");
 
         persistentSouls.Value = Souls.Value;
-        persistentInfluence.Value = Influence.Value;
+        persistentInfluence.Value = Mana.Value;
         persistentHarvested.Value = Harvested.Value;
         persistentVictims.Value = Victims.Value;
     }
