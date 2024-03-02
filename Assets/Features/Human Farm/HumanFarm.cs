@@ -1,6 +1,4 @@
 using Game.Framework;
-using System.Collections;
-using System.Collections.Generic;
 using UnityEngine;
 
 public class HumanFarm : GameBehaviour
@@ -14,14 +12,13 @@ public class HumanFarm : GameBehaviour
 
     public void Consume()
     {
-        // TODO: Multipliers should be applied here
-
         bank.Victims.Value += 1;
-
-        OnConsumed();
     }
 
-    protected virtual void OnConsumed() { }
+    public void Consume(double count)
+    {
+        bank.Victims.Value += count;
+    }
 
     [ContextMenu("Consume Debug Human")]
     private void ConsumeDebugHuman()
