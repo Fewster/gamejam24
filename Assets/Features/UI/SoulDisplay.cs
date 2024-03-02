@@ -28,7 +28,7 @@ public class SoulDisplay : GameBehaviour
     {
         // TODO: We can handle formatting here ...
 
-        var text = $"{value}";
+        var text = $"{string.Format("{0:0.##}", value)}";
         SetContent?.Invoke(text);
     }
 }
