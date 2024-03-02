@@ -13,14 +13,8 @@ public class Persistence : GameService<Persistence>
     public PersistenceProvider Provider;
 
     public event Action OnSaving;
+    public event Action OnLoading;
     public event Action OnLoaded;
-
-    protected override void OnSetup()
-    {
-        // TODO: Begin loading here ...
-
-        base.OnSetup();
-    }
 
     public void Save()
     {
@@ -33,8 +27,6 @@ public class Persistence : GameService<Persistence>
         var data = codec.Write(Model);
 
         _ = Provider.Save(data);
-
-        // TODO: Actually save
     }
 
     public void Load()
@@ -46,25 +38,32 @@ public class Persistence : GameService<Persistence>
 
     private async Task LoadAsync()
     {
-        var data = await Provider.Load();
-        if (data == null) // No data to load
+        OnLoading?.Invoke();
+
+        try
         {
-            // TODO: If we load and there is no data, we may accidentally wipe the local user data and lose progress!
-            // What do we do in this case?
+            var data = await Provider.Load();
+            if (data == null) // No data to load
+            {
+                // TODO: If we load and there is no data, we may accidentally wipe the local user data and lose progress!
+                // What do we do in this case?
 
-            return;
+                return;
+            }
+
+            var codec = FetchCodec(data);
+            if (codec == null)
+            {
+                // TODO: Save data is not valid, what do we do here? ...
+                return;
+            }
+
+            codec.Read(data, Model);
         }
-
-        var codec = FetchCodec(data);
-        if (codec == null)
+        finally
         {
-            // TODO: Save data is not valid, what do we do here? ...
-            return;
+            OnLoaded?.Invoke();
         }
-
-        codec.Read(data, Model);
-
-        OnLoaded?.Invoke();
     }
 
     private IPersistenceCodec FetchCodec(byte[] data)
