@@ -2,7 +2,7 @@ using Game.Framework;
 using System;
 using UnityEngine;
 
-public class Bank : GameService<Bank>
+public class Bank : GameService<Bank>, IPersistent
 {
     /// <summary>
     /// The total souls that the player has.
@@ -36,6 +36,32 @@ public class Bank : GameService<Bank>
         Harvested.Dirty();
         Victims.Dirty();
     }
+
+    public void Load(PersistenceModel model)
+    {
+        var persistentSouls = model.EnsureDouble("TOTAL_SOULS");
+        var persistentInfluence = model.EnsureDouble("TOTAL_INFLUENCE");
+        var persistentHarvested = model.EnsureDouble("TOTAL_HARVESTED");
+        var persistentVictims = model.EnsureDouble("TOTAL_VICTIMS");
+
+        Souls.Value = persistentSouls.Value;
+        Influence.Value = persistentInfluence.Value;
+        Harvested.Value = persistentHarvested.Value;
+        Victims.Value = persistentVictims.Value;
+    }
+
+    public void Save(PersistenceModel model)
+    {
+        var persistentSouls = model.EnsureDouble("TOTAL_SOULS");
+        var persistentInfluence = model.EnsureDouble("TOTAL_INFLUENCE");
+        var persistentHarvested = model.EnsureDouble("TOTAL_HARVESTED");
+        var persistentVictims = model.EnsureDouble("TOTAL_VICTIMS");
+
+        persistentSouls.Value = Souls.Value;
+        persistentInfluence.Value = Influence.Value;
+        persistentHarvested.Value = Harvested.Value;
+        persistentVictims.Value = Victims.Value;
+    }
 }
 
 [Serializable]
@@ -58,7 +84,7 @@ public class Stat
     }
 
     public ulong Version { get; private set; }
-    
+
     internal void Dirty()
     {
         Version++;
