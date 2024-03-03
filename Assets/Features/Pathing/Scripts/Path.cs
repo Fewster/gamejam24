@@ -13,4 +13,14 @@ public class Path : GameBehaviour
         var service = Resolver.Resolve<AgentService>();
         service.RegisterPath(PathIndex, this);
     }
+
+    public void OnDrawGizmosSelected()
+    {
+        var childCount = transform.childCount;
+
+        for(int i = 1; i < childCount; i++) 
+        {
+            Gizmos.DrawLine(transform.GetChild(i - 1).position, transform.GetChild(i).position);
+        }
+    }
 }
