@@ -1,7 +1,8 @@
 // Each #kernel tells which function to compile; you can have many kernels
 #pragma kernel CSMain
-#pragma kernel AppendRunner
-#pragma kernel ConsumeRunner
+#pragma kernel PrepareCull
+#pragma kernel CullAgents
+#pragma kernel SpawnAgents
 
 struct Agent
 {
@@ -17,18 +18,34 @@ struct Path
     float3 points[8];
 };
 
-RWStructuredBuffer<Agent> AgentBuffer;
-RWStructuredBuffer<int> AgentConsumeCount;
-int AgentCount;
+struct OutputInfo
+{
+    int ActiveAgentCount;
+    int DestructionQueueCount;
+};
 
+//Global
+float _Time;
+int AgentsToAdd;
+
+//IndirectArgs - should be bound to all
+RWStructuredBuffer<OutputInfo> ComputeInfo;
+RWStructuredBuffer<int> CullIndexer;
+
+//CSMain, PrepareCull, CullAgents
+RWStructuredBuffer<Agent> AgentBuffer;
+
+//PrepareCull, CullAgents 
+RWStructuredBuffer<Agent> CleanAgentBuffer;
+
+//CSMain
 StructuredBuffer<Path> Paths;
 
-float _Time;
-
+//
 [numthreads(32,1,1)]
 void CSMain (uint3 id : SV_DispatchThreadID)
 {
-    if (id.x >= AgentCount)
+    if (id.x >= ComputeInfo[0].ActiveAgentCount)
     {
         return;
     }
@@ -38,7 +55,6 @@ void CSMain (uint3 id : SV_DispatchThreadID)
     {
         agent.position.y += 0.01;
         AgentBuffer[id.x] = agent;
-        //InterlockedAdd(AgentConsumeCount[0], 1);
         return;
     }
     
@@ -62,7 +78,7 @@ void CSMain (uint3 id : SV_DispatchThreadID)
         if (agent.goal >= path.count)
         {
             agent.goal = -1;
-            InterlockedAdd(AgentConsumeCount[0], 1);
+            InterlockedAdd(ComputeInfo[0].DestructionQueueCount, 1);
         }
     }
     
@@ -70,66 +86,59 @@ void CSMain (uint3 id : SV_DispatchThreadID)
 }
 
 
-AppendStructuredBuffer<Agent> AppendBuffer;
-ConsumeStructuredBuffer<Agent> ConsumeBuffer;
-
-int AgentsToAdd;
-
-float random(float2 st)
-{
-    return frac(sin(dot(st.xy,
-                         float2(12.9898, 78.233))) *
-        43758.5453123);
-}
-
+//Sets up buffer for culling dead agents
 [numthreads(32, 1, 1)]
-void AppendRunner(uint3 id : SV_DispatchThreadID)
+void PrepareCull(uint3 id : SV_DispatchThreadID)
 {
-    if (id.x < AgentsToAdd)
+    if (id.x >= ComputeInfo[0].ActiveAgentCount)
     {
-        Agent agent;
-        agent.hash = random(float2(id.x + _Time, 313));
-        agent.goal = 1;
-        agent.path = random(float2(217, id.x + _Time + 3)) * 1.999999;
-        
-        agent.position = Paths[agent.path].points[0];
-        AppendBuffer.Append(agent);
+        return;
     }
-}
-
-
-
-AppendStructuredBuffer<Agent> CleanAgentBuffer;
-
-//Copies every agent that matches requirements into an empty buffer
-void PrepareBufferForCull(uint3 id : SV_DispatchThreadID)
-{
-    if(id.x >= AgentCount)
-    {
-        Agent agent = AgentBuffer[id.x];
-        if(agent.goal != -1)
-        {
-            CleanAgentBuffer.Append(agent);
-        }
-    }
-}
-
-//Consume dead agents and then reallocate the existing agents
-[numthreads(32,1,1)]
-void ConsumeRunner(uint3 id: SV_DispatchThreadID)
-{
-    if (id.x >= AgentCount)
+       
+    if(AgentBuffer[id.x].goal == -1)
     {
         return;
     }
     
-    if(id.x < AgentConsumeCount[0])
+    int originalVal = 0;
+    InterlockedAdd(CullIndexer[0], 1, originalVal);
+    CleanAgentBuffer[originalVal] = AgentBuffer[id.x];
+}
+
+[numthreads(32, 1, 1)]
+void CullAgents(uint3 id : SV_DispatchThreadID)
+{
+    if (id.x >= ComputeInfo[0].ActiveAgentCount - ComputeInfo[0].DestructionQueueCount)
     {
-        ConsumeBuffer.Consume();
+        return;
     }
     
-    if (id.x < AgentCount - AgentConsumeCount[0])
+    AgentBuffer[id.x] = CleanAgentBuffer[id.x];
+}
+
+
+
+float random(float2 st)
+{
+    return frac(sin(dot(st.xy, float2(12.9898, 78.233))) * 43758.5453123);
+}
+
+
+[numthreads(32, 1, 1)]
+void SpawnAgents(uint3 id : SV_DispatchThreadID)
+{
+    if (id.x < AgentsToAdd)
     {
-        AgentBuffer[id.x] = CleanAgentBuffer[id.x];
+        int agentCount = 0;
+        InterlockedAdd(ComputeInfo[0].ActiveAgentCount, 1, agentCount);
+        
+        Agent agent;
+        agent.hash = random(float2(ComputeInfo[0].ActiveAgentCount + id.x + _Time, 313));
+        agent.goal = 1;
+        agent.path = random(float2(217, ComputeInfo[0].ActiveAgentCount + id.x + _Time + 3)) * 2;
+        agent.position = Paths[agent.path].points[0];
+        
+        AgentBuffer[id.x + agentCount + 1] = agent;
+    
     }
 }

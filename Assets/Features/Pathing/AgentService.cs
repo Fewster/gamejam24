@@ -12,17 +12,22 @@ public class AgentService : GameService<AgentService>
 
     int PathingComputeKernel;
     int AppendAgentsComputeKernel;
-    int ConsumeAgentsComputeKernel;
-    ComputeBuffer AgentBuffer;
-    ComputeBuffer PathBuffer;
-    GraphicsBuffer IndirectArgs;
-    ComputeBuffer ConsumeArgsBuffer;
-    GraphicsBuffer.IndirectDrawIndexedArgs[] IndirectArgsData;
-    const int IndirectArgsCount = 1;
+    int PrepCullComputeKernel;
+    int CullComputeKernel;
 
+    ComputeBuffer AgentBuffer;
+    ComputeBuffer AgentCopyBuffer;
+    ComputeBuffer PathBuffer;
+    ComputeBuffer ComputeInfoIndirectArgs;
+    ComputeBuffer CullIndexerIndirectArgs;
+
+    //Rendering
+    GraphicsBuffer IndirectDrawingArgs;
+    GraphicsBuffer.IndirectDrawIndexedArgs[] DrawingArgsData;
     public Material mat;
     public Mesh mesh;
 
+    //Path management
     List<PathLayout> Paths = new List<PathLayout>(8) 
     { 
         new PathLayout(),
@@ -68,7 +73,7 @@ public class AgentService : GameService<AgentService>
     {
         base.OnSetup();
 
-        InitAgentShader();
+        InitShaders();
     }
 
     protected override void OnCleanup()
@@ -80,9 +85,18 @@ public class AgentService : GameService<AgentService>
         {
             if (AgentBuffer != null)
             {
-                AgentBuffer.SetCounterValue(0);
                 AgentBuffer.Release();
                 AgentBuffer.Dispose();
+            }
+        }
+        catch { }
+        
+        try
+        {
+            if (AgentCopyBuffer != null)
+            {
+                AgentCopyBuffer.Release();
+                AgentCopyBuffer.Dispose();
             }
         }
         catch { }
@@ -98,18 +112,27 @@ public class AgentService : GameService<AgentService>
 
         try
         {
-            if (IndirectArgs != null)
+            if (IndirectDrawingArgs != null)
             {
-                IndirectArgs.Dispose();
+                IndirectDrawingArgs.Dispose();
             }
         }
         catch { }
 
         try
         {
-            if (ConsumeArgsBuffer != null)
+            if (ComputeInfoIndirectArgs != null)
             {
-                ConsumeArgsBuffer.Dispose();
+                ComputeInfoIndirectArgs.Dispose();
+            }
+        }
+        catch { }
+        
+        try
+        {
+            if (CullIndexerIndirectArgs != null)
+            {
+                CullIndexerIndirectArgs.Dispose();
             }
         }
         catch { }
@@ -117,50 +140,51 @@ public class AgentService : GameService<AgentService>
 
 
 
-    public void InitAgentShader()
+    public void InitShaders()
     {
+        //Setup Kernel hooks
         PathingComputeKernel = Compute.FindKernel("CSMain");
-        AppendAgentsComputeKernel = Compute.FindKernel("AppendRunner");
-        ConsumeAgentsComputeKernel = Compute.FindKernel("ConsumeRunner");
+        AppendAgentsComputeKernel = Compute.FindKernel("SpawnAgents");
+        PrepCullComputeKernel = Compute.FindKernel("PrepareCull");
+        CullComputeKernel = Compute.FindKernel("CullAgents");
 
         //Setup buffers
-        AgentBuffer = new ComputeBuffer(MaxAgents, AGENT_LAYOUT_SIZE, ComputeBufferType.Append);
-        AgentBuffer.SetCounterValue(0);
+        AgentBuffer = new ComputeBuffer(MaxAgents, AGENT_LAYOUT_SIZE);
+        AgentCopyBuffer = new ComputeBuffer(MaxAgents, AGENT_LAYOUT_SIZE);
+        ComputeInfoIndirectArgs = new ComputeBuffer(1, 8, ComputeBufferType.IndirectArguments);
+        ComputeInfoIndirectArgs.SetData(new int[] { 0, 0 });
+        CullIndexerIndirectArgs = new ComputeBuffer(1, 4, ComputeBufferType.IndirectArguments);
+        CullIndexerIndirectArgs.SetData(new int[] { 0 });
 
-        ConsumeArgsBuffer = new ComputeBuffer(1, 4);
-        ConsumeArgsBuffer.SetData(new int[] { 0 });
 
         //Bind relevant buffers to programs
+        // - CSMain
+        Compute.SetBuffer(PathingComputeKernel, "ComputeInfo", ComputeInfoIndirectArgs);
         Compute.SetBuffer(PathingComputeKernel, "AgentBuffer", AgentBuffer);
-        Compute.SetBuffer(PathingComputeKernel, "AgentConsumeCount", ConsumeArgsBuffer);
-        Compute.SetBuffer(AppendAgentsComputeKernel, "AppendBuffer", AgentBuffer);
-        Compute.SetBuffer(ConsumeAgentsComputeKernel, "ConsumeBuffer", AgentBuffer);
-        Compute.SetBuffer(ConsumeAgentsComputeKernel, "AgentConsumeCount", ConsumeArgsBuffer);
-
-        Compute.SetInt("AgentCount", 0);
-
-        //Path setup
         UpdatePaths();
+        
+        // - Prepare Cull
+        Compute.SetBuffer(PrepCullComputeKernel, "ComputeInfo", ComputeInfoIndirectArgs);
+        Compute.SetBuffer(PrepCullComputeKernel, "CullIndexer", CullIndexerIndirectArgs);
+        Compute.SetBuffer(PrepCullComputeKernel, "AgentBuffer", AgentBuffer);
+        Compute.SetBuffer(PrepCullComputeKernel, "CleanAgentBuffer", AgentCopyBuffer);
+
+        // - Cull Agents
+        Compute.SetBuffer(CullComputeKernel, "ComputeInfo", ComputeInfoIndirectArgs);
+        Compute.SetBuffer(CullComputeKernel, "AgentBuffer", AgentBuffer);
+        Compute.SetBuffer(CullComputeKernel, "CleanAgentBuffer", AgentCopyBuffer);
+
+        // - Append agents
+        Compute.SetBuffer(AppendAgentsComputeKernel, "ComputeInfo", ComputeInfoIndirectArgs);
+        Compute.SetBuffer(AppendAgentsComputeKernel, "AgentBuffer", AgentBuffer);
+
+        Compute.SetInt("AgentsToAdd", 0);
 
         //Args for drawing
-        IndirectArgs = new GraphicsBuffer(GraphicsBuffer.Target.IndirectArguments, IndirectArgsCount, GraphicsBuffer.IndirectDrawIndexedArgs.size);
-        IndirectArgsData = new GraphicsBuffer.IndirectDrawIndexedArgs[IndirectArgsCount];
-
+        IndirectDrawingArgs = new GraphicsBuffer(GraphicsBuffer.Target.IndirectArguments, 1, GraphicsBuffer.IndirectDrawIndexedArgs.size);
+        DrawingArgsData = new GraphicsBuffer.IndirectDrawIndexedArgs[1];
         mat.SetBuffer("AgentBuffer", AgentBuffer);
     }
-
-    private void UpdatePaths()
-    {
-        if(PathBuffer == null)
-        {
-            PathBuffer = new ComputeBuffer(8, PATH_LAYOUT_SIZE);
-        }
-
-        PathBuffer.SetData(Paths);
-        Compute.SetBuffer(PathingComputeKernel, "Paths", PathBuffer);
-        Compute.SetBuffer(AppendAgentsComputeKernel, "Paths", PathBuffer);
-    }
-
 
     public void RegisterPath(int pathIndex, Path path)
     {
@@ -188,6 +212,18 @@ public class AgentService : GameService<AgentService>
         UpdatePaths();
     }
 
+    private void UpdatePaths()
+    {
+        if(PathBuffer == null)
+        {
+            PathBuffer = new ComputeBuffer(8, PATH_LAYOUT_SIZE);
+        }
+
+        PathBuffer.SetData(Paths);
+        Compute.SetBuffer(PathingComputeKernel, "Paths", PathBuffer);
+        Compute.SetBuffer(AppendAgentsComputeKernel, "Paths", PathBuffer);
+    }
+
 
     public void SpawnAgents(int count)
     {
@@ -212,16 +248,16 @@ public class AgentService : GameService<AgentService>
 
     public int GetActiveAgentCount()
     {
-        ComputeBuffer countBuffer = new ComputeBuffer(1, 4, ComputeBufferType.IndirectArguments);
-        ComputeBuffer.CopyCount(AgentBuffer, countBuffer, 0);
-
-        int[] counterResult = new int[1];
-        countBuffer.GetData(counterResult, 0, 0, 1);
-        countBuffer.Dispose();
-
-        AgentBuffer.SetCounterValue((uint)counterResult[0]);
-
+        int[] counterResult = new int[2];
+        ComputeInfoIndirectArgs.GetData(counterResult, 0, 0, 2);
         return counterResult[0];
+    }
+
+    public int GetDestructionQueueSize()
+    {
+        int[] counterResult = new int[2];
+        ComputeInfoIndirectArgs.GetData(counterResult, 0, 0, 2);
+        return counterResult[1];
     }
 
     public void UpdateAgents()
@@ -236,16 +272,13 @@ public class AgentService : GameService<AgentService>
         Compute.GetKernelThreadGroupSizes(PathingComputeKernel, out uint threadGroupSizeX, out _, out _);
         int threadGroupSize = Mathf.CeilToInt((float)activeAgents / threadGroupSizeX);
 
-        Compute.SetInt("AgentCount", activeAgents);
-        Compute.SetFloat("_Time", Time.time);
-
         //Run pathing logic
         Compute.Dispatch(PathingComputeKernel, threadGroupSize, 1, 1);
 
         //Dispose agents at end of track
-        Compute.Dispatch(ConsumeAgentsComputeKernel, threadGroupSize, 1, 1);
-        //Reset consumption args
-        ConsumeArgsBuffer.SetData(new int[] { 0 });
+        //Compute.Dispatch(ConsumeAgentsComputeKernel, threadGroupSize, 1, 1);
+        ////Reset consumption args
+        //ConsumeArgsBuffer.SetData(new int[] { 0 });
         RenderAgents(GetActiveAgentCount());
     }
 
@@ -253,9 +286,9 @@ public class AgentService : GameService<AgentService>
     {
         var renderParams = new RenderParams(mat);
         renderParams.worldBounds = new Bounds(Vector3.zero, 10000 * Vector3.one);
-        IndirectArgsData[0].indexCountPerInstance = mesh.GetIndexCount(0);
-        IndirectArgsData[0].instanceCount = (uint)count;
-        IndirectArgs.SetData(IndirectArgsData);
-        Graphics.RenderMeshIndirect(renderParams, mesh, IndirectArgs, IndirectArgsCount);
+        DrawingArgsData[0].indexCountPerInstance = mesh.GetIndexCount(0);
+        DrawingArgsData[0].instanceCount = (uint)count;
+        IndirectDrawingArgs.SetData(DrawingArgsData);
+        Graphics.RenderMeshIndirect(renderParams, mesh, IndirectDrawingArgs, 1);
     }
 }
