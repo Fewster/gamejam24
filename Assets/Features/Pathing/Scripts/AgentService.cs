@@ -250,11 +250,6 @@ public class AgentService : GameService<AgentService>
 
     public void Update()
     {
-        if (Input.GetKeyUp(KeyCode.Space))
-        {
-            SpawnAgents(8);
-        }
-
         UpdateAgents();
     }
 
