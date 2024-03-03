@@ -161,7 +161,6 @@ public class AgentService : GameService<AgentService>
         // - CSMain
         Compute.SetBuffer(PathingComputeKernel, "ComputeInfo", ComputeInfoIndirectArgs);
         Compute.SetBuffer(PathingComputeKernel, "AgentBuffer", AgentBuffer);
-        UpdatePaths();
         
         // - Prepare Cull
         Compute.SetBuffer(PrepCullComputeKernel, "ComputeInfo", ComputeInfoIndirectArgs);
@@ -177,6 +176,8 @@ public class AgentService : GameService<AgentService>
         // - Append agents
         Compute.SetBuffer(AppendAgentsComputeKernel, "ComputeInfo", ComputeInfoIndirectArgs);
         Compute.SetBuffer(AppendAgentsComputeKernel, "AgentBuffer", AgentBuffer);
+
+        UpdatePaths();
 
         Compute.SetInt("AgentsToAdd", 0);
 
@@ -275,11 +276,25 @@ public class AgentService : GameService<AgentService>
         //Run pathing logic
         Compute.Dispatch(PathingComputeKernel, threadGroupSize, 1, 1);
 
-        //Dispose agents at end of track
-        //Compute.Dispatch(ConsumeAgentsComputeKernel, threadGroupSize, 1, 1);
-        ////Reset consumption args
-        //ConsumeArgsBuffer.SetData(new int[] { 0 });
+        var destrutionQueueSize = GetDestructionQueueSize();
+        if (destrutionQueueSize > 0)
+        {
+            CullAgents(activeAgents, destrutionQueueSize); 
+        }
+
         RenderAgents(GetActiveAgentCount());
+    }
+
+    public void CullAgents(int activeAgentCount, int markedForCullCount)
+    {
+        Compute.GetKernelThreadGroupSizes(CullComputeKernel, out uint threadGroupSizeX, out _, out _);
+        int threadGroupSize = Mathf.CeilToInt((float)activeAgentCount / threadGroupSizeX);
+
+        Compute.Dispatch(PrepCullComputeKernel, threadGroupSize, 1, 1);
+        Compute.Dispatch(CullComputeKernel, threadGroupSize, 1, 1);
+
+        ComputeInfoIndirectArgs.SetData(new int[] { activeAgentCount - markedForCullCount, 0 });
+        CullIndexerIndirectArgs.SetData(new int[] { 0 });
     }
 
     public void RenderAgents(int count)

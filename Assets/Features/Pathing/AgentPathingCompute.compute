@@ -72,7 +72,7 @@ void CSMain (uint3 id : SV_DispatchThreadID)
     
     agent.position.y = target.y + max(0, sin(10 * _Time + agent.hash * 4218.0)) * 0.1;
     
-    if (length(target - agent.position) < 0.1)
+    if (length(target - agent.position) < 0.4)
     {
         agent.goal++;
         if (agent.goal >= path.count)
@@ -134,11 +134,10 @@ void SpawnAgents(uint3 id : SV_DispatchThreadID)
         
         Agent agent;
         agent.hash = random(float2(ComputeInfo[0].ActiveAgentCount + id.x + _Time, 313));
-        agent.goal = 1;
         agent.path = random(float2(217, ComputeInfo[0].ActiveAgentCount + id.x + _Time + 3)) * 2;
         agent.position = Paths[agent.path].points[0];
+        agent.goal = 1;
         
-        AgentBuffer[id.x + agentCount + 1] = agent;
-    
+        AgentBuffer[agentCount] = agent;
     }
 }
