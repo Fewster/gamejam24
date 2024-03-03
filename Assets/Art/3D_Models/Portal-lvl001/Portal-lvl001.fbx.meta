@@ -7,8 +7,13 @@ ModelImporter:
   - first:
       type: UnityEngine:Material
       assembly: UnityEngine.CoreModule
-      name: Material.001
-    second: {fileID: 2100000, guid: eac411d98b35aa442b498891aa8151da, type: 2}
+      name: Black
+    second: {fileID: 2100000, guid: 195d5f56841b9af4d8f826ebf104ca41, type: 2}
+  - first:
+      type: UnityEngine:Material
+      assembly: UnityEngine.CoreModule
+      name: Orange-Shad
+    second: {fileID: 2100000, guid: aa072d62cd70f794d9fec2147bb8221c, type: 2}
   - first:
       type: UnityEngine:Material
       assembly: UnityEngine.CoreModule
@@ -17,23 +22,13 @@ ModelImporter:
   - first:
       type: UnityEngine:Material
       assembly: UnityEngine.CoreModule
-      name: Stone
-    second: {fileID: 2100000, guid: 1b7dde4dbe5029847bd2c2ed5166b63b, type: 2}
+      name: Stone-HL
+    second: {fileID: 2100000, guid: c0de40c1fafcdc449997587e689d71ec, type: 2}
   - first:
-      type: UnityEngine:Texture2D
+      type: UnityEngine:Material
       assembly: UnityEngine.CoreModule
-      name: 2937bbed-cdd4-4a51-aab5-192427dc817e
-    second: {fileID: 2800000, guid: 970f9ae2c4cb00e4bbdc70e4a3539da9, type: 3}
-  - first:
-      type: UnityEngine:Texture2D
-      assembly: UnityEngine.CoreModule
-      name: Screenshot 2024-03-02 130732
-    second: {fileID: 2800000, guid: 10090224590baa84ab55ebff26ac0731, type: 3}
-  - first:
-      type: UnityEngine:Texture2D
-      assembly: UnityEngine.CoreModule
-      name: crate
-    second: {fileID: 2800000, guid: 5199d5552322a414e963dca9ac6fd97d, type: 3}
+      name: Stone-Shad
+    second: {fileID: 2100000, guid: b5ad03769e840a84ebc696cfa4bdd475, type: 2}
   materials:
     materialImportMode: 2
     materialName: 0
