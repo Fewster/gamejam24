@@ -6,8 +6,10 @@ Shader "Unlit/InstancedEntityShader"
     }
     SubShader
     {
-        Tags { "RenderType"="Opaque" }
+        Tags { "RenderType"="Transparent" }
         LOD 100
+        Blend SrcAlpha OneMinusSrcAlpha
+        Cull Off
 
         Pass
         {
@@ -28,8 +30,8 @@ Shader "Unlit/InstancedEntityShader"
             struct v2f
             {
                 float2 uv : TEXCOORD0;
-                UNITY_FOG_COORDS(1)
                 float4 vertex : SV_POSITION;
+                float hash : TEXCOORD1;
             };
 
             sampler2D _MainTex;
@@ -38,10 +40,10 @@ Shader "Unlit/InstancedEntityShader"
             
             
             struct Agent{
-                float3 Position;
-                float Hash;
-                float3 Velocity;
-                int Track;
+                float3 position;
+                float hash;
+                int path;
+                int goal;
             }; 
 
             StructuredBuffer<Agent> AgentBuffer;
@@ -52,22 +54,26 @@ Shader "Unlit/InstancedEntityShader"
                 v2f o;
 
                 float4 vertex = v.vertex;
-                v.vertex.xyz *= 0.1;
+                v.vertex.xyz *= 0.5;
                 float4 wPos = mul(unity_ObjectToWorld, v.vertex);
-                wPos.xyz += AgentBuffer[svInstanceID].Position;// + float3(0,svInstanceID,0);
+                wPos.xyz += AgentBuffer[svInstanceID].position;// + float3(0,svInstanceID,0);
 
                 o.vertex = mul(UNITY_MATRIX_VP, wPos);
                 o.uv = TRANSFORM_TEX(v.uv, _MainTex);
-                UNITY_TRANSFER_FOG(o,o.vertex);
+                o.hash = AgentBuffer[svInstanceID].hash;
                 return o;
             }
 
             fixed4 frag (v2f i) : SV_Target
             {
+                float timeWithOffset = _Time.y + i.hash * 527.4221;
+                float2 animFrame = float2(0.1428571 * floor(timeWithOffset * 14), 0.25 * floor(timeWithOffset * 1));
+
                 // sample the texture
-                fixed4 col = tex2D(_MainTex, i.uv);
-                // apply fog
-                UNITY_APPLY_FOG(i.fogCoord, col);
+                fixed4 col = tex2D(_MainTex, i.uv + animFrame);
+                //
+                clip(col.a - 0.5);
+
                 return col;
             }
             ENDCG

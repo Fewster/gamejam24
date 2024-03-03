@@ -372,7 +372,7 @@ MonoBehaviour:
     m_PersistentCalls:
       m_Calls: []
   mat: {fileID: 2100000, guid: b1d86af7c1dbf494a9e474eac9630431, type: 2}
-  mesh: {fileID: 10207, guid: 0000000000000000e000000000000000, type: 0}
+  mesh: {fileID: 10210, guid: 0000000000000000e000000000000000, type: 0}
 --- !u!114 &6356878573146698832
 MonoBehaviour:
   m_ObjectHideFlags: 0
