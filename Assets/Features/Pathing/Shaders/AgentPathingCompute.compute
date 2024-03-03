@@ -1,0 +1,149 @@
+// Each #kernel tells which function to compile; you can have many kernels
+#pragma kernel CSMain
+#pragma kernel PrepareCull
+#pragma kernel CullAgents
+#pragma kernel SpawnAgents
+
+#define PATH_LIMIT 8
+#define PATH_POINT_LIMIT 8
+
+struct Agent
+{
+    float3 position;
+    float hash;
+    int path;
+    int goal;
+};
+
+struct Path
+{
+    int count;
+    float3 points[PATH_POINT_LIMIT];
+};
+
+struct OutputInfo
+{
+    int ActiveAgentCount;
+    int DestructionQueueCount;
+    
+    int pathCompleted[PATH_LIMIT];
+};
+
+//Global
+float _Time;
+int AgentsToAdd;
+
+//IndirectArgs - should be bound to all
+RWStructuredBuffer<OutputInfo> ComputeInfo;
+RWStructuredBuffer<int> CullIndexer;
+
+//CSMain, PrepareCull, CullAgents
+RWStructuredBuffer<Agent> AgentBuffer;
+
+//PrepareCull, CullAgents 
+RWStructuredBuffer<Agent> CleanAgentBuffer;
+
+//CSMain
+StructuredBuffer<Path> Paths;
+
+//
+[numthreads(32,1,1)]
+void CSMain (uint3 id : SV_DispatchThreadID)
+{
+    if (id.x >= (uint)ComputeInfo[0].ActiveAgentCount)
+    {
+        return;
+    }
+    
+    Agent agent = AgentBuffer[id.x];
+    if(agent.goal == -1)
+    {
+        agent.position.y += 0.01;
+        AgentBuffer[id.x] = agent;
+        return;
+    }
+    
+    Path path = Paths[agent.path];
+    
+    float3 target = path.points[agent.goal];
+    float angle = (agent.hash + id.x) * 360.0;
+    float2x2 rotMat = float2x2(cos(angle), -sin(angle),
+                               sin(angle), cos(angle));
+    
+    target.xz += mul(rotMat, float2(1, 0)) * 0.2;
+    //
+    float3 dir = normalize(target - agent.position);
+    agent.position += dir * 0.01;
+    
+    agent.position.y = target.y + max(0, sin(10 * _Time + agent.hash * 4218.0)) * 0.1;
+    
+    if (length(target - agent.position) < 0.2)
+    {
+        agent.goal++;
+        if (agent.goal >= path.count)
+        {
+            agent.goal = -1;
+            InterlockedAdd(ComputeInfo[0].pathCompleted[agent.path], 1);
+            InterlockedAdd(ComputeInfo[0].DestructionQueueCount, 1);
+        }
+    }
+    
+    AgentBuffer[id.x] = agent;
+}
+
+
+//Sets up buffer for culling dead agents
+[numthreads(32, 1, 1)]
+void PrepareCull(uint3 id : SV_DispatchThreadID)
+{
+    if (id.x >= (uint)ComputeInfo[0].ActiveAgentCount)
+    {
+        return;
+    }
+       
+    if(AgentBuffer[id.x].goal == -1)
+    {
+        return;
+    }
+    
+    int originalVal = 0;
+    InterlockedAdd(CullIndexer[0], 1, originalVal);
+    CleanAgentBuffer[originalVal] = AgentBuffer[id.x];
+}
+
+[numthreads(32, 1, 1)]
+void CullAgents(uint3 id : SV_DispatchThreadID)
+{
+    if (id.x >= (uint)(ComputeInfo[0].ActiveAgentCount - ComputeInfo[0].DestructionQueueCount))
+    {
+        return;
+    }
+    
+    AgentBuffer[id.x] = CleanAgentBuffer[id.x];
+}
+
+
+
+float random(float2 st)
+{
+    return frac(sin(dot(st.xy, float2(12.9898, 78.233))) * 43758.5453123);
+}
+
+
+[numthreads(32, 1, 1)]
+void SpawnAgents(uint3 id : SV_DispatchThreadID)
+{
+    if (id.x < (uint)AgentsToAdd)
+    {
+        int agentCount = 0;
+        InterlockedAdd(ComputeInfo[0].ActiveAgentCount, 1, agentCount);
+        
+        Agent agent;
+        agent.hash = random(float2(ComputeInfo[0].ActiveAgentCount + id.x + _Time, 313));
+        agent.path = random(float2(217, ComputeInfo[0].ActiveAgentCount + id.x + _Time + 3)) * 2;
+        agent.position = Paths[agent.path].points[0];
+        agent.goal = 1;
+        
+        AgentBuffer[agentCount] = agent;
+    }
+}
