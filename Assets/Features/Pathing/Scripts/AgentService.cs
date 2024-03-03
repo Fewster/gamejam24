@@ -4,11 +4,21 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using UnityEngine;
+using UnityEngine.Events;
+
+public class RouteCompleteArgs
+{
+    public int RouteId;
+    public int AgentAmount;
+}
 
 public class AgentService : GameService<AgentService>
 {
     public int MaxAgents = 65536;
     public ComputeShader Compute = null;
+
+    //Invoked whenever the compute shader has detected that a route has been completed by agent(s)
+    public UnityEvent<RouteCompleteArgs> OnRouteComplete;
 
     int PathingComputeKernel;
     int AppendAgentsComputeKernel;
@@ -140,7 +150,7 @@ public class AgentService : GameService<AgentService>
 
 
 
-    public void InitShaders()
+    private void InitShaders()
     {
         //Setup Kernel hooks
         PathingComputeKernel = Compute.FindKernel("CSMain");
@@ -151,8 +161,9 @@ public class AgentService : GameService<AgentService>
         //Setup buffers
         AgentBuffer = new ComputeBuffer(MaxAgents, AGENT_LAYOUT_SIZE);
         AgentCopyBuffer = new ComputeBuffer(MaxAgents, AGENT_LAYOUT_SIZE);
-        ComputeInfoIndirectArgs = new ComputeBuffer(1, 8, ComputeBufferType.IndirectArguments);
-        ComputeInfoIndirectArgs.SetData(new int[] { 0, 0 });
+        ComputeInfoIndirectArgs = new ComputeBuffer(1, 4 * 10, ComputeBufferType.IndirectArguments);
+        ComputeInfoIndirectArgs.SetData(new int[] { 0, 0,
+                                                    0, 0, 0, 0, 0, 0, 0, 0});//Hardcoded to 8 paths
         CullIndexerIndirectArgs = new ComputeBuffer(1, 4, ComputeBufferType.IndirectArguments);
         CullIndexerIndirectArgs.SetData(new int[] { 0 });
 
@@ -249,19 +260,19 @@ public class AgentService : GameService<AgentService>
 
     public int GetActiveAgentCount()
     {
-        int[] counterResult = new int[2];
-        ComputeInfoIndirectArgs.GetData(counterResult, 0, 0, 2);
+        int[] counterResult = new int[10];
+        ComputeInfoIndirectArgs.GetData(counterResult, 0, 0, 10);
         return counterResult[0];
     }
 
     public int GetDestructionQueueSize()
     {
-        int[] counterResult = new int[2];
-        ComputeInfoIndirectArgs.GetData(counterResult, 0, 0, 2);
+        int[] counterResult = new int[10];
+        ComputeInfoIndirectArgs.GetData(counterResult, 0, 0, 10);
         return counterResult[1];
     }
 
-    public void UpdateAgents()
+    private void UpdateAgents()
     {
         int activeAgents = GetActiveAgentCount();
 
@@ -285,7 +296,7 @@ public class AgentService : GameService<AgentService>
         RenderAgents(GetActiveAgentCount());
     }
 
-    public void CullAgents(int activeAgentCount, int markedForCullCount)
+    private void CullAgents(int activeAgentCount, int markedForCullCount)
     {
         Compute.GetKernelThreadGroupSizes(CullComputeKernel, out uint threadGroupSizeX, out _, out _);
         int threadGroupSize = Mathf.CeilToInt((float)activeAgentCount / threadGroupSizeX);
@@ -293,11 +304,29 @@ public class AgentService : GameService<AgentService>
         Compute.Dispatch(PrepCullComputeKernel, threadGroupSize, 1, 1);
         Compute.Dispatch(CullComputeKernel, threadGroupSize, 1, 1);
 
-        ComputeInfoIndirectArgs.SetData(new int[] { activeAgentCount - markedForCullCount, 0 });
+        int[] counterResult = new int[10];
+        ComputeInfoIndirectArgs.GetData(counterResult, 0, 0, 10);
+
+        for(int i = 0; i < 8; i++)
+        {
+            if (counterResult[2 + i] != 0)
+            {
+                OnRouteComplete.Invoke(new RouteCompleteArgs
+                {
+                    AgentAmount = counterResult[2 + i],
+                    RouteId = i
+                });
+            }
+        }
+
+
+
+        ComputeInfoIndirectArgs.SetData(new int[] { activeAgentCount - markedForCullCount, 0, 
+                                                   0,0,0,0,0,0,0,0 });// Hardcoded to 8 routes
         CullIndexerIndirectArgs.SetData(new int[] { 0 });
     }
 
-    public void RenderAgents(int count)
+    private void RenderAgents(int count)
     {
         var renderParams = new RenderParams(mat);
         renderParams.worldBounds = new Bounds(Vector3.zero, 10000 * Vector3.one);

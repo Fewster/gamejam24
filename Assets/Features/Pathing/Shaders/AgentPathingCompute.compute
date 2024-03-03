@@ -4,6 +4,9 @@
 #pragma kernel CullAgents
 #pragma kernel SpawnAgents
 
+#define PATH_LIMIT 8
+#define PATH_POINT_LIMIT 8
+
 struct Agent
 {
     float3 position;
@@ -15,13 +18,15 @@ struct Agent
 struct Path
 {
     int count;
-    float3 points[8];
+    float3 points[PATH_POINT_LIMIT];
 };
 
 struct OutputInfo
 {
     int ActiveAgentCount;
     int DestructionQueueCount;
+    
+    int pathCompleted[PATH_LIMIT];
 };
 
 //Global
@@ -45,7 +50,7 @@ StructuredBuffer<Path> Paths;
 [numthreads(32,1,1)]
 void CSMain (uint3 id : SV_DispatchThreadID)
 {
-    if (id.x >= ComputeInfo[0].ActiveAgentCount)
+    if (id.x >= (uint)ComputeInfo[0].ActiveAgentCount)
     {
         return;
     }
@@ -72,12 +77,13 @@ void CSMain (uint3 id : SV_DispatchThreadID)
     
     agent.position.y = target.y + max(0, sin(10 * _Time + agent.hash * 4218.0)) * 0.1;
     
-    if (length(target - agent.position) < 0.4)
+    if (length(target - agent.position) < 0.2)
     {
         agent.goal++;
         if (agent.goal >= path.count)
         {
             agent.goal = -1;
+            InterlockedAdd(ComputeInfo[0].pathCompleted[agent.path], 1);
             InterlockedAdd(ComputeInfo[0].DestructionQueueCount, 1);
         }
     }
@@ -90,7 +96,7 @@ void CSMain (uint3 id : SV_DispatchThreadID)
 [numthreads(32, 1, 1)]
 void PrepareCull(uint3 id : SV_DispatchThreadID)
 {
-    if (id.x >= ComputeInfo[0].ActiveAgentCount)
+    if (id.x >= (uint)ComputeInfo[0].ActiveAgentCount)
     {
         return;
     }
@@ -108,7 +114,7 @@ void PrepareCull(uint3 id : SV_DispatchThreadID)
 [numthreads(32, 1, 1)]
 void CullAgents(uint3 id : SV_DispatchThreadID)
 {
-    if (id.x >= ComputeInfo[0].ActiveAgentCount - ComputeInfo[0].DestructionQueueCount)
+    if (id.x >= (uint)(ComputeInfo[0].ActiveAgentCount - ComputeInfo[0].DestructionQueueCount))
     {
         return;
     }
@@ -127,7 +133,7 @@ float random(float2 st)
 [numthreads(32, 1, 1)]
 void SpawnAgents(uint3 id : SV_DispatchThreadID)
 {
-    if (id.x < AgentsToAdd)
+    if (id.x < (uint)AgentsToAdd)
     {
         int agentCount = 0;
         InterlockedAdd(ComputeInfo[0].ActiveAgentCount, 1, agentCount);
