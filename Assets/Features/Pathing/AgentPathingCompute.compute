@@ -1,5 +1,7 @@
 // Each #kernel tells which function to compile; you can have many kernels
 #pragma kernel CSMain
+#pragma kernel AppendRunner
+#pragma kernel ConsumeRunner
 
 struct Agent
 {
@@ -16,6 +18,7 @@ struct Path
 };
 
 RWStructuredBuffer<Agent> AgentBuffer;
+RWStructuredBuffer<int> AgentConsumeCount;
 int AgentCount;
 
 StructuredBuffer<Path> Paths;
@@ -25,11 +28,24 @@ float _Time;
 [numthreads(32,1,1)]
 void CSMain (uint3 id : SV_DispatchThreadID)
 {
+    if (id.x >= AgentCount)
+    {
+        return;
+    }
+    
     Agent agent = AgentBuffer[id.x];
+    if(agent.goal == -1)
+    {
+        agent.position.y += 0.01;
+        AgentBuffer[id.x] = agent;
+        //InterlockedAdd(AgentConsumeCount[0], 1);
+        return;
+    }
+    
     Path path = Paths[agent.path];
     
     float3 target = path.points[agent.goal];
-    float angle = agent.hash * 360.0;
+    float angle = (agent.hash + id.x) * 360.0;
     float2x2 rotMat = float2x2(cos(angle), -sin(angle),
                                sin(angle), cos(angle));
     
@@ -43,11 +59,77 @@ void CSMain (uint3 id : SV_DispatchThreadID)
     if (length(target - agent.position) < 0.1)
     {
         agent.goal++;
-        if (agent.goal >= 8)
+        if (agent.goal >= path.count)
         {
-            agent.goal = 0;
+            agent.goal = -1;
+            InterlockedAdd(AgentConsumeCount[0], 1);
         }
     }
     
     AgentBuffer[id.x] = agent;
+}
+
+
+AppendStructuredBuffer<Agent> AppendBuffer;
+ConsumeStructuredBuffer<Agent> ConsumeBuffer;
+
+int AgentsToAdd;
+
+float random(float2 st)
+{
+    return frac(sin(dot(st.xy,
+                         float2(12.9898, 78.233))) *
+        43758.5453123);
+}
+
+[numthreads(32, 1, 1)]
+void AppendRunner(uint3 id : SV_DispatchThreadID)
+{
+    if (id.x < AgentsToAdd)
+    {
+        Agent agent;
+        agent.hash = random(float2(id.x + _Time, 313));
+        agent.goal = 1;
+        agent.path = random(float2(217, id.x + _Time + 3)) * 1.999999;
+        
+        agent.position = Paths[agent.path].points[0];
+        AppendBuffer.Append(agent);
+    }
+}
+
+
+
+AppendStructuredBuffer<Agent> CleanAgentBuffer;
+
+//Copies every agent that matches requirements into an empty buffer
+void PrepareBufferForCull(uint3 id : SV_DispatchThreadID)
+{
+    if(id.x >= AgentCount)
+    {
+        Agent agent = AgentBuffer[id.x];
+        if(agent.goal != -1)
+        {
+            CleanAgentBuffer.Append(agent);
+        }
+    }
+}
+
+//Consume dead agents and then reallocate the existing agents
+[numthreads(32,1,1)]
+void ConsumeRunner(uint3 id: SV_DispatchThreadID)
+{
+    if (id.x >= AgentCount)
+    {
+        return;
+    }
+    
+    if(id.x < AgentConsumeCount[0])
+    {
+        ConsumeBuffer.Consume();
+    }
+    
+    if (id.x < AgentCount - AgentConsumeCount[0])
+    {
+        AgentBuffer[id.x] = CleanAgentBuffer[id.x];
+    }
 }
