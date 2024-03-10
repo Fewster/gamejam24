@@ -54,8 +54,9 @@ public class AgentService : GameService<AgentService>
     [StructLayout(LayoutKind.Sequential)]
     public struct AgentLayout
     {
-        public Vector3 Position;
+        public Vector2 Position;
         public float Hash;
+        public float facingDirection;
         public int Track;
         public int Goal;
     }
@@ -66,17 +67,17 @@ public class AgentService : GameService<AgentService>
     public struct PathLayout
     {
         public int PointCount;
-        public Vector3 Points0;
-        public Vector3 Points1;
-        public Vector3 Points2;
-        public Vector3 Points3;
-        public Vector3 Points4;
-        public Vector3 Points5;
-        public Vector3 Points6;
-        public Vector3 Points7;
+        public Vector2 Points0;
+        public Vector2 Points1;
+        public Vector2 Points2;
+        public Vector2 Points3;
+        public Vector2 Points4;
+        public Vector2 Points5;
+        public Vector2 Points6;
+        public Vector2 Points7;
     }
 
-    const int PATH_LAYOUT_SIZE = sizeof(float) * (3 * 8) + sizeof(int) * (1);
+    const int PATH_LAYOUT_SIZE = sizeof(float) * (2 * 8) + sizeof(int) * (1);
 
 
     protected override void OnSetup()
