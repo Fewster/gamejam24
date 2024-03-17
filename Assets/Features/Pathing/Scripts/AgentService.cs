@@ -271,7 +271,8 @@ public class AgentService : GameService<AgentService>
     private void UpdateAgents()
     {
         int activeAgents = GetActiveAgentCount();
-
+        Compute.SetFloat("_Time", Time.time);
+        Compute.SetFloat("_DeltaTime", Time.deltaTime);
         if(activeAgents <= 0) 
         {
             return;

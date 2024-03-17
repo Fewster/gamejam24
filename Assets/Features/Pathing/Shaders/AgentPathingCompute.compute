@@ -32,6 +32,7 @@ struct OutputInfo
 
 //Global
 float _Time;
+float _DeltaTime;
 int AgentsToAdd;
 
 //IndirectArgs - should be bound to all
@@ -49,10 +50,21 @@ StructuredBuffer<Path> Paths;
 
 #define PI 3.141592
 
-#define MinSpeed 0.0025
-#define MaxSpeed 0.01
+#define MinSpeed 0.75
+#define MaxSpeed 1.0
 
 //
+float2 CalculateTarget(Agent agent, float radius)
+{
+    Path path = Paths[agent.path];
+    float2 target = path.points[agent.goal];
+    float angle = (agent.hash) * 47812;
+    float2x2 rotMat = float2x2(cos(angle), -sin(angle),
+                               sin(angle), cos(angle));
+    target.xy += mul(rotMat, float2(1, 0)) * radius;
+    return target;
+}
+
 [numthreads(32,1,1)]
 void CSMain (uint3 id : SV_DispatchThreadID)
 {
@@ -69,20 +81,16 @@ void CSMain (uint3 id : SV_DispatchThreadID)
         return;
     }
     //
+    
     Path path = Paths[agent.path];
+    float2 target = CalculateTarget(agent, 0.2);
     
-    float2 target = path.points[agent.goal];
-    float angle = (agent.hash + id.x) * 360.0;
-    float2x2 rotMat = float2x2(cos(angle), -sin(angle),
-                               sin(angle), cos(angle));
-    
-    float speed = (MaxSpeed - MinSpeed) * agent.hash + MinSpeed;
+    float speed = (MaxSpeed - MinSpeed) * pow(frac(agent.hash * 321.4517), 3) + MinSpeed;
     
     //
-    target.xy += mul(rotMat, float2(1, 0)) * 0.2;
     //
     float2 dir = normalize(target - agent.position);
-    agent.position += dir * speed;
+    agent.position += dir * speed * _DeltaTime;
     
     float normalizedAngle = (atan2(dir.y, dir.x) + PI) / (PI * 2.0);
     agent.facingDir = floor(normalizedAngle * 4.0);
@@ -154,7 +162,14 @@ void SpawnAgents(uint3 id : SV_DispatchThreadID)
         agent.hash = random(float2(ComputeInfo[0].ActiveAgentCount + id.x + _Time, 313));
         agent.path = random(float2(217, ComputeInfo[0].ActiveAgentCount + id.x + _Time + 3)) * 2;
         agent.facingDir = 0;
-        agent.position = Paths[agent.path].points[0];
+        
+        
+        agent.goal = 0;
+        
+        float2 spawnOffset = float2(random(float2(_Time + 414.85, (float) id.x)), random(float2((float) id.x, 0.212 + _Time)));
+        spawnOffset = (spawnOffset - 0.5) * 2.0;
+        
+        agent.position = CalculateTarget(agent, 0.05) + spawnOffset * 0.15;
         agent.goal = 1;
         
         AgentBuffer[agentCount] = agent;
