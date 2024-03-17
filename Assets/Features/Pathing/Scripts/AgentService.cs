@@ -21,6 +21,7 @@ public class AgentService : GameService<AgentService>
     public UnityEvent<RouteCompleteArgs> OnRouteComplete;
 
     int PathingComputeKernel;
+    int ForceComputeKernel;
     int AppendAgentsComputeKernel;
     int PrepCullComputeKernel;
     int CullComputeKernel;
@@ -55,13 +56,13 @@ public class AgentService : GameService<AgentService>
     public struct AgentLayout
     {
         public Vector2 Position;
+        public Vector2 velocity;
         public float Hash;
-        public float facingDirection;
         public int Track;
         public int Goal;
     }
 
-    const int AGENT_LAYOUT_SIZE = sizeof(float) * (3 + 1) + sizeof(int) * (2);
+    const int AGENT_LAYOUT_SIZE = sizeof(float) * (4 + 1) + sizeof(int) * (2);
 
     [StructLayout(LayoutKind.Sequential)]
     public struct PathLayout
@@ -155,6 +156,7 @@ public class AgentService : GameService<AgentService>
     {
         //Setup Kernel hooks
         PathingComputeKernel = Compute.FindKernel("CSMain");
+        ForceComputeKernel = Compute.FindKernel("ForceCalculator");
         AppendAgentsComputeKernel = Compute.FindKernel("SpawnAgents");
         PrepCullComputeKernel = Compute.FindKernel("PrepareCull");
         CullComputeKernel = Compute.FindKernel("CullAgents");
@@ -173,7 +175,11 @@ public class AgentService : GameService<AgentService>
         // - CSMain
         Compute.SetBuffer(PathingComputeKernel, "ComputeInfo", ComputeInfoIndirectArgs);
         Compute.SetBuffer(PathingComputeKernel, "AgentBuffer", AgentBuffer);
-        
+
+        // - Force
+        Compute.SetBuffer(ForceComputeKernel, "ComputeInfo", ComputeInfoIndirectArgs);
+        Compute.SetBuffer(ForceComputeKernel, "AgentBuffer", AgentBuffer);
+
         // - Prepare Cull
         Compute.SetBuffer(PrepCullComputeKernel, "ComputeInfo", ComputeInfoIndirectArgs);
         Compute.SetBuffer(PrepCullComputeKernel, "CullIndexer", CullIndexerIndirectArgs);
@@ -234,6 +240,7 @@ public class AgentService : GameService<AgentService>
 
         PathBuffer.SetData(Paths);
         Compute.SetBuffer(PathingComputeKernel, "Paths", PathBuffer);
+        Compute.SetBuffer(ForceComputeKernel, "Paths", PathBuffer);
         Compute.SetBuffer(AppendAgentsComputeKernel, "Paths", PathBuffer);
     }
 
@@ -270,6 +277,8 @@ public class AgentService : GameService<AgentService>
 
     private void UpdateAgents()
     {
+        Compute.SetFloat("_DeltaTime", Time.deltaTime);
+        Compute.SetFloat("_Time", Time.time);
         int activeAgents = GetActiveAgentCount();
 
         if(activeAgents <= 0) 
@@ -281,6 +290,7 @@ public class AgentService : GameService<AgentService>
         int threadGroupSize = Mathf.CeilToInt((float)activeAgents / threadGroupSizeX);
 
         //Run pathing logic
+        Compute.Dispatch(ForceComputeKernel, threadGroupSize, 1, 1);
         Compute.Dispatch(PathingComputeKernel, threadGroupSize, 1, 1);
 
         var destrutionQueueSize = GetDestructionQueueSize();

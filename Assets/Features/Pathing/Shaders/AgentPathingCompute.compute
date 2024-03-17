@@ -1,5 +1,6 @@
 // Each #kernel tells which function to compile; you can have many kernels
 #pragma kernel CSMain
+#pragma kernel ForceCalculator
 #pragma kernel PrepareCull
 #pragma kernel CullAgents
 #pragma kernel SpawnAgents
@@ -10,8 +11,8 @@
 struct Agent
 {
     float2 position;
+    float2 velocity;
     float hash;
-    float facingDir;
     int path;
     int goal;
 };
@@ -32,6 +33,7 @@ struct OutputInfo
 
 //Global
 float _Time;
+float _DeltaTime;
 int AgentsToAdd;
 
 //IndirectArgs - should be bound to all
@@ -49,8 +51,21 @@ StructuredBuffer<Path> Paths;
 
 #define PI 3.141592
 
-#define MinSpeed 0.0025
-#define MaxSpeed 0.01
+#define MinSpeed 0.25
+#define MaxSpeed 1.0
+
+float2 CalculateTarget(Agent agent)
+{
+    Path path = Paths[agent.path];
+    
+    float2 target = path.points[agent.goal];
+    float angle = (agent.hash) * 360.0;
+    float2x2 rotMat = float2x2(cos(angle), -sin(angle),
+                               sin(angle), cos(angle));
+    
+    target.xy += mul(rotMat, float2(1, 0)) * 0.2;
+    return target;
+}
 
 //
 [numthreads(32,1,1)]
@@ -64,31 +79,19 @@ void CSMain (uint3 id : SV_DispatchThreadID)
     Agent agent = AgentBuffer[id.x];
     if(agent.goal == -1)
     {
-        agent.position.y += 0.01;
-        AgentBuffer[id.x] = agent;
+        //Agent has no goal (and probably is prepped to be culled)
         return;
     }
-    //
-    Path path = Paths[agent.path];
-    
-    float2 target = path.points[agent.goal];
-    float angle = (agent.hash + id.x) * 360.0;
-    float2x2 rotMat = float2x2(cos(angle), -sin(angle),
-                               sin(angle), cos(angle));
-    
-    float speed = (MaxSpeed - MinSpeed) * agent.hash + MinSpeed;
     
     //
-    target.xy += mul(rotMat, float2(1, 0)) * 0.2;
-    //
-    float2 dir = normalize(target - agent.position);
-    agent.position += dir * speed;
+    float2 target = CalculateTarget(agent);
+    agent.position += agent.velocity * _DeltaTime;
     
-    float normalizedAngle = (atan2(dir.y, dir.x) + PI) / (PI * 2.0);
-    agent.facingDir = floor(normalizedAngle * 4.0);
+    //float normalizedAngle = (atan2(dir.y, dir.x) + PI) / (PI * 2.0);
+    //agent.facingDir = floor(normalizedAngle * 4.0);
     
     //agent.position.y = target.y + max(0, sin(10 * _Time + agent.hash * 4218.0)) * 0.1;
-    
+    Path path = Paths[agent.path];
     if (length(target - agent.position) < 0.2)
     {
         agent.goal++;
@@ -98,6 +101,58 @@ void CSMain (uint3 id : SV_DispatchThreadID)
             InterlockedAdd(ComputeInfo[0].pathCompleted[agent.path], 1);
             InterlockedAdd(ComputeInfo[0].DestructionQueueCount, 1);
         }
+    }
+    
+    AgentBuffer[id.x] = agent;
+}
+
+
+
+
+[numthreads(32, 1, 1)]
+void ForceCalculator(uint3 id : SV_DispatchThreadID)
+{
+    //Naive Collision Seperator
+    if (id.x >= (uint) ComputeInfo[0].ActiveAgentCount)
+    {
+        return;
+    }
+    
+    Agent agent = AgentBuffer[id.x];
+    
+    float2 force = float2(0, 0);
+    //o(Nsquared) complexity, will attempt to simplify in future
+    for (int i = 0; i < ComputeInfo[0].ActiveAgentCount; i++)
+    {
+        if ((uint) i == id.x)
+        {
+            continue;
+        }
+        
+        Agent other = AgentBuffer[i];
+        float2 displacement = other.position - agent.position;
+        
+        if (length(displacement) < 0.5)
+        {
+            force += 0.1 * (0.5 / -normalize(displacement) - 1.0) * _DeltaTime;
+        }
+    }
+
+    //Calculate desired walk direction
+    float2 desiredGoal = CalculateTarget(agent);
+    float2 dirToGoal = desiredGoal - agent.position;
+   
+    float speed = (MaxSpeed - MinSpeed) * agent.hash + MinSpeed;
+    
+    force += normalize(dirToGoal) * speed * 1000 * _DeltaTime;
+    
+    //For now no accelertaion
+    agent.velocity += force * _DeltaTime;
+    
+    if (length(agent.velocity) > 1)
+    {
+        agent.velocity = normalize(agent.velocity) * speed;
+
     }
     
     AgentBuffer[id.x] = agent;
@@ -153,10 +208,11 @@ void SpawnAgents(uint3 id : SV_DispatchThreadID)
         Agent agent;
         agent.hash = random(float2(ComputeInfo[0].ActiveAgentCount + id.x + _Time, 313));
         agent.path = random(float2(217, ComputeInfo[0].ActiveAgentCount + id.x + _Time + 3)) * 2;
-        agent.facingDir = 0;
-        agent.position = Paths[agent.path].points[0];
-        agent.goal = 1;
+        agent.velocity = float2(0,0);
         
+        agent.goal = 0;
+        agent.position = CalculateTarget(agent);
+        agent.goal = 1;
         AgentBuffer[agentCount] = agent;
     }
 }

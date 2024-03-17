@@ -42,14 +42,15 @@ Shader "Unlit/InstancedEntityShader"
             
             struct Agent{
                 float2 position;
+                float2 velocity;
                 float hash;
-                float facingDir;
                 int path;
                 int goal;
             }; 
 
             StructuredBuffer<Agent> AgentBuffer;
 
+#define PI 3.141592
 
             v2f vert (appdata v, uint svInstanceID : SV_InstanceID)
             {
@@ -64,7 +65,12 @@ Shader "Unlit/InstancedEntityShader"
                 o.vertex = mul(UNITY_MATRIX_VP, wPos);
                 o.uv = TRANSFORM_TEX(v.uv, _MainTex);
                 o.hash = AgentBuffer[svInstanceID].hash;
-                o.facingDir = AgentBuffer[svInstanceID].facingDir;
+
+                float2 vel = AgentBuffer[svInstanceID].velocity;
+                float normalizedAngle = (atan2(vel.y, vel.x) + PI) / (PI * 2.0);
+                o.facingDir = floor(normalizedAngle * 4.0);
+
+              //  o.facingDir = AgentBuffer[svInstanceID].facingDir;
                 return o;
             }
 
