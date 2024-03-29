@@ -14,7 +14,7 @@ public class Path : GameBehaviour
         service.RegisterPath(PathIndex, this);
     }
 
-    public void OnDrawGizmosSelected()
+    public void OnDrawGizmos()
     {
         var childCount = transform.childCount;
 
