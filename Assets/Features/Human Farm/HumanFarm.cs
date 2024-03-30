@@ -1,7 +1,9 @@
 using Game.Framework;
 using UnityEngine;
 
-public class HumanFarm : GameBehaviour
+public class HumanFarm : 
+    GameBehaviour,
+    IFarmStructure
 {
     private Bank bank;
 
