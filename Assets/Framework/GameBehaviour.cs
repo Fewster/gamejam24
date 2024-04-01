@@ -11,7 +11,26 @@ namespace Game.Framework
 
         public IResolver Resolver { get; private set; }
 
-        protected virtual void OnEnable()
+        private void Start()
+        {
+            Initialize ();
+        }
+
+        private void OnDestroy()
+        {
+            if (setup)
+            {
+                setup = false;
+                OnCleanup();
+            }
+        }
+
+        protected virtual IResolver AcquireResolver()
+        {
+            return GetComponentInParent<IResolver>();
+        }
+
+        private void Initialize()
         {
             Resolver = AcquireResolver();
 
@@ -25,20 +44,6 @@ namespace Game.Framework
             setup = true;
 
             OnSetup();
-        }
-
-        protected virtual void OnDisable()
-        {
-            if (setup)
-            {
-                setup = false;
-                OnCleanup();
-            }
-        }
-
-        protected virtual IResolver AcquireResolver()
-        {
-            return GetComponentInParent<IResolver>();
         }
 
         protected virtual void OnSetup() { }

@@ -2,7 +2,9 @@ using Game.Framework;
 using System;
 using UnityEngine;
 
-public class Bank : GameService<Bank>, IPersistent
+public class Bank : 
+    GameService<Bank>,
+    IPersistent
 {
     /// <summary>
     /// The total souls that the player has.
@@ -42,30 +44,38 @@ public class Bank : GameService<Bank>, IPersistent
         Victims.Dirty();
     }
 
-    public void Load(PersistenceModel model)
+    public void Load(PersistentModel model)
     {
-        var persistentSouls = model.EnsureDouble("TOTAL_SOULS");
-        var persistentInfluence = model.EnsureDouble("TOTAL_MANA");
-        var persistentHarvested = model.EnsureDouble("TOTAL_HARVESTED");
-        var persistentVictims = model.EnsureDouble("TOTAL_VICTIMS");
+        var container = model.GetContainer("BANK");
+        if (container == null)
+        {
+            return;
+        }
+
+        var persistentSouls = container.EnsureDouble("TOTAL_SOULS");
+        var persistentInfluence = container.EnsureDouble("TOTAL_MANA");
+        var persistentVictims = container.EnsureDouble("TOTAL_VICTIMS");
+        var persistentHarvested = container.EnsureDouble("TOTAL_HARVESTED");
 
         Souls.Value = persistentSouls.Value;
         Mana.Value = persistentInfluence.Value;
-        Harvested.Value = persistentHarvested.Value;
         Victims.Value = persistentVictims.Value;
+        Harvested.Value = persistentHarvested.Value;
     }
 
-    public void Save(PersistenceModel model)
+    public void Save(PersistentModel model)
     {
-        var persistentSouls = model.EnsureDouble("TOTAL_SOULS");
-        var persistentInfluence = model.EnsureDouble("TOTAL_MANA");
-        var persistentHarvested = model.EnsureDouble("TOTAL_HARVESTED");
-        var persistentVictims = model.EnsureDouble("TOTAL_VICTIMS");
+        var container = model.EnsureContainer("BANK");
+
+        var persistentSouls = container.EnsureDouble("TOTAL_SOULS");
+        var persistentInfluence = container.EnsureDouble("TOTAL_MANA");
+        var persistentVictims = container.EnsureDouble("TOTAL_VICTIMS");
+        var persistentHarvested = container.EnsureDouble("TOTAL_HARVESTED");
 
         persistentSouls.Value = Souls.Value;
         persistentInfluence.Value = Mana.Value;
-        persistentHarvested.Value = Harvested.Value;
         persistentVictims.Value = Victims.Value;
+        persistentHarvested.Value = Harvested.Value;
     }
 }
 

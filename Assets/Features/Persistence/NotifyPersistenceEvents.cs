@@ -30,21 +30,21 @@ public class NotifyPersistenceEvents : GameBehaviour
         }
     }
 
-    private void OnSaving()
+    private void OnSaving(PersistentModel model)
     {
         var objects = GetComponents<IPersistent>();
         foreach(var obj in objects)
         {
-            obj.Save(persistence.Model);
+            obj.Save(model);
         }
     }
 
-    private void OnLoaded()
+    private void OnLoaded(PersistentModel model)
     {
         var objects = GetComponents<IPersistent>();
         foreach (var obj in objects)
         {
-            obj.Load(persistence.Model);
+            obj.Load(model);
         }
     }
 }

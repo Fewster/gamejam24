@@ -4,12 +4,12 @@ public class Portal : GameService<Portal>, IPersistent
 {
     // TODO: Define portal stats here ...
 
-    public void Load(PersistenceModel model)
+    public void Load(PersistentModel model)
     {
         // TODO: Load data
     }
 
-    public void Save(PersistenceModel model)
+    public void Save(PersistentModel model)
     {
         // TODO: Save data
     }

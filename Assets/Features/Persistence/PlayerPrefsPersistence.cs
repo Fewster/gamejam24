@@ -55,7 +55,6 @@ public class PlayerPrefsPersistenceEditor : Editor
 
         if (GUILayout.Button(new GUIContent("Wipe Data", $"Wipe the data saved under key: '{key}'")))
         {
-
             item.WipeData();
         }
     }

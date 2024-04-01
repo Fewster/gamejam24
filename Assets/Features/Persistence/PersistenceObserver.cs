@@ -9,8 +9,8 @@ public class PersistenceObserver : GameBehaviour
     private Persistence persistence;
 
     public UnityEvent OnBeforeLoad;
-    public UnityEvent OnBeforeSave;
-    public UnityEvent OnDataLoaded;
+    public UnityEvent<PersistentModel> OnBeforeSave;
+    public UnityEvent<PersistentModel> OnDataLoaded;
 
     protected override void OnSetup()
     {
@@ -21,9 +21,9 @@ public class PersistenceObserver : GameBehaviour
         persistence.OnSaving += OnSaving;
     }
 
-    private void OnSaving()
+    private void OnSaving(PersistentModel model)
     {
-        OnBeforeSave?.Invoke();
+        OnBeforeSave?.Invoke(model);
 
     }
 
@@ -32,8 +32,8 @@ public class PersistenceObserver : GameBehaviour
         OnBeforeLoad?.Invoke();
     }
 
-    private void OnLoaded()
+    private void OnLoaded(PersistentModel model)
     {
-        OnDataLoaded?.Invoke();
+        OnDataLoaded?.Invoke(model);
     }
 }

@@ -1,5 +1,5 @@
 ﻿public interface IPersistenceCodec
 {
-    byte[] Write(PersistenceModel model);
-    void Read(byte[] data, PersistenceModel model);
+    byte[] Write(PersistentModel model);
+    void Read(byte[] data, PersistentModel model);
 }

@@ -4,6 +4,6 @@ using UnityEngine;
 
 public interface IPersistent 
 {
-    void Load(PersistenceModel model);
-    void Save(PersistenceModel model);
+    void Load(PersistentModel model);
+    void Save(PersistentModel model);
 }

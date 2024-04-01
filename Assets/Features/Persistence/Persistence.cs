@@ -8,23 +8,32 @@ using UnityEngine;
 
 public class Persistence : GameService<Persistence>
 {
-    public PersistenceModel Model { get; private set; } = new();
-
     public PersistenceProvider Provider;
 
-    public event Action OnSaving;
+    public event Action<PersistentModel> OnSaving;
+    public event Action<PersistentModel> OnLoaded;
     public event Action OnLoading;
-    public event Action OnLoaded;
 
     public void Save()
     {
-        // Let objects append any extra save data before saving
-        OnSaving?.Invoke();
+        var model = new PersistentModel();
 
-        Debug.Log($"Saving {Model.Count} properties");
+        // Let objects append any extra save data before saving
+        OnSaving?.Invoke(model);
+
+       // Debug.Log($"Saving {model.Count} containers");
+
+        foreach(var container in model)
+        {
+            Debug.Log($"Saving Container {container.Name}");
+            foreach(var property in container)
+            {
+                Debug.Log($"Saving Property {property.Name} {property.Type}");
+            }
+        }
 
         var codec = new PersistenceCodecV1();
-        var data = codec.Write(Model);
+        var data = codec.Write(model);
 
         _ = Provider.Save(data);
     }
@@ -39,6 +48,8 @@ public class Persistence : GameService<Persistence>
     private async Task LoadAsync()
     {
         OnLoading?.Invoke();
+
+        var model = new PersistentModel();
 
         try
         {
@@ -58,11 +69,11 @@ public class Persistence : GameService<Persistence>
                 return;
             }
 
-            codec.Read(data, Model);
+            codec.Read(data, model);
         }
         finally
         {
-            OnLoaded?.Invoke();
+            OnLoaded?.Invoke(model);
         }
     }
 
@@ -97,14 +108,95 @@ public class Persistence : GameService<Persistence>
     }
 }
 
-public class PersistenceModel : IEnumerable<PersistentProperty>
+internal static class PropertyFactory
+{
+    public static PersistentProperty Create(string name, PropertyType type)
+    {
+        switch (type)
+        {
+            case PropertyType.Double:
+                return new DoubleProperty(name);
+            case PropertyType.String:
+                return new StringProperty(name);
+            case PropertyType.Int32:
+                return new Int32Property(name);
+            case PropertyType.Bool:
+                return new BoolProperty(name);
+            default:
+                throw new NotImplementedException();
+        }
+    }
+}
+
+public interface IPropertyFactory
+{
+    PersistentProperty GetProperty(string name, PropertyType type);
+    PersistentProperty EnsureProperty(string name, PropertyType type);
+}
+
+public class PersistentModel : IEnumerable<PersistentContainer>
+{
+    private readonly Dictionary<string, PersistentContainer> containers;
+
+    public int Count { get { return containers.Count; } }
+
+    public PersistentModel()
+    {
+        containers = new Dictionary<string, PersistentContainer>();
+    }
+
+    public PersistentContainer GetContainer(string name)
+    {
+        containers.TryGetValue(name, out var container);
+        return container;
+    }
+
+    public PersistentContainer EnsureContainer(string name)
+    {
+        if(!containers.TryGetValue(name, out var container))
+        {
+            container = new PersistentContainer(name);
+            containers.Add(name, container);
+        }
+
+        return container;
+    }
+
+    public PersistentContainer CreateContainer(string name)
+    {
+        if (containers.ContainsKey(name))
+        {
+            throw new InvalidOperationException("An object already exists with the given name");
+        }
+
+        var instance = new PersistentContainer(name);
+        containers[name] = instance;
+        return instance;
+    }
+
+    public IEnumerator<PersistentContainer> GetEnumerator()
+    {
+        return containers.Values.GetEnumerator();
+    }
+
+    IEnumerator IEnumerable.GetEnumerator()
+    {
+        return containers.Values.GetEnumerator();
+    }
+}
+
+public class PersistentContainer : 
+    IEnumerable<PersistentProperty>,
+    IPropertyFactory
 {
     private readonly Dictionary<PropertyIndex, PersistentProperty> properties;
 
+    public string Name { get; private set; }
     public int Count { get { return properties.Count; } }
 
-    public PersistenceModel()
+    internal PersistentContainer(string name)
     {
+        Name = name;
         properties = new Dictionary<PropertyIndex, PersistentProperty>();
     }
 
@@ -125,26 +217,11 @@ public class PersistenceModel : IEnumerable<PersistentProperty>
         var index = new PropertyIndex(name, type);
         if (!properties.TryGetValue(index, out var value))
         {
-            value = CreateProperty(name, type);
+            value = PropertyFactory.Create(name, type);
             properties.Add(index, value);
         }
 
         return value;
-    }
-
-    private PersistentProperty CreateProperty(string name, PropertyType type)
-    {
-        switch (type)
-        {
-            case PropertyType.Double:
-                return new PersistentDouble(name);
-            case PropertyType.String:
-                return new PersistentString(name);
-            case PropertyType.Int32:
-                return new PersistentInt32(name);
-            default:
-                throw new NotImplementedException();
-        }
     }
 
     public IEnumerator<PersistentProperty> GetEnumerator()
@@ -158,36 +235,46 @@ public class PersistenceModel : IEnumerable<PersistentProperty>
     }
 }
 
-public static class PersistenceModelExtensions
+public static class PropertyFactoryExtensions
 {
-    public static PersistentInt32 GetInt32(this PersistenceModel model, string name)
+    public static Int32Property GetInt32(this IPropertyFactory factory, string name)
     {
-        return model.GetProperty(name, PropertyType.Int32) as PersistentInt32;
+        return factory.GetProperty(name, PropertyType.Int32) as Int32Property;
     }
 
-    public static PersistentDouble GetDouble(this PersistenceModel model, string name)
+    public static DoubleProperty GetDouble(this IPropertyFactory factory, string name)
     {
-        return model.GetProperty(name, PropertyType.Double) as PersistentDouble;
+        return factory.GetProperty(name, PropertyType.Double) as DoubleProperty;
     }
 
-    public static PersistentString GetString(this PersistenceModel model, string name)
+    public static StringProperty GetString(this IPropertyFactory factory, string name)
     {
-        return model.GetProperty(name, PropertyType.String) as PersistentString;
+        return factory.GetProperty(name, PropertyType.String) as StringProperty;
     }
 
-    public static PersistentInt32 EnsureInt32(this PersistenceModel model, string name)
+    public static BoolProperty GetBool(this IPropertyFactory factory, string name)
     {
-        return model.EnsureProperty(name, PropertyType.Int32) as PersistentInt32;
+        return factory.GetProperty(name, PropertyType.Bool) as BoolProperty;
     }
 
-    public static PersistentDouble EnsureDouble(this PersistenceModel model, string name)
+    public static Int32Property EnsureInt32(this IPropertyFactory factory, string name)
     {
-        return model.EnsureProperty(name, PropertyType.Double) as PersistentDouble;
+        return factory.EnsureProperty(name, PropertyType.Int32) as Int32Property;
     }
 
-    public static PersistentString EnsureString(this PersistenceModel model, string name)
+    public static DoubleProperty EnsureDouble(this IPropertyFactory factory, string name)
     {
-        return model.EnsureProperty(name, PropertyType.String) as PersistentString;
+        return factory.EnsureProperty(name, PropertyType.Double) as DoubleProperty;
+    }
+
+    public static StringProperty EnsureString(this IPropertyFactory factory, string name)
+    {
+        return factory.EnsureProperty(name, PropertyType.String) as StringProperty;
+    }
+
+    public static BoolProperty EnsureBool(this IPropertyFactory factory, string name)
+    {
+        return factory.EnsureProperty(name, PropertyType.Bool) as BoolProperty;
     }
 }
 
@@ -214,7 +301,7 @@ public abstract class PersistentProperty
     }
 }
 
-public class PersistentInt32 : PersistentProperty
+public class Int32Property : PersistentProperty
 {
     public int Value { get; set; }
 
@@ -223,10 +310,10 @@ public class PersistentInt32 : PersistentProperty
         get { return PropertyType.Int32; }
     }
 
-    public PersistentInt32(string name) : base(name) { }
+    public Int32Property(string name) : base(name) { }
 }
 
-public class PersistentDouble : PersistentProperty
+public class DoubleProperty : PersistentProperty
 {
     public double Value { get; set; }
 
@@ -235,10 +322,10 @@ public class PersistentDouble : PersistentProperty
         get { return PropertyType.Double; }
     }
 
-    public PersistentDouble(string name) : base(name) { }
+    public DoubleProperty(string name) : base(name) { }
 }
 
-public class PersistentString : PersistentProperty
+public class StringProperty : PersistentProperty
 {
     public string Value { get; set; }
 
@@ -247,12 +334,25 @@ public class PersistentString : PersistentProperty
         get { return PropertyType.String; }
     }
 
-    public PersistentString(string name) : base(name) { }
+    public StringProperty(string name) : base(name) { }
+}
+
+public class BoolProperty : PersistentProperty
+{
+    public bool Value { get; set; }
+
+    public override PropertyType Type
+    {
+        get { return PropertyType.Bool; }
+    }
+
+    public BoolProperty(string name) : base(name) { }
 }
 
 public enum PropertyType
 {
     Double,
     String,
-    Int32
+    Int32,
+    Bool
 }
